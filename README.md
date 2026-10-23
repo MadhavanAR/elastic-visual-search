@@ -103,21 +103,26 @@ flowchart LR
 ### Installation and Setup
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/MadhavanAR/elastic-visual-search.git
    cd elastic-visual-search
    ```
 
 2. **Install dependencies**:
+
    ```bash
    npm install
    ```
 
 3. **Configure local environment variables**:
+
    ```bash
    cp .env.example .env.local
    ```
+
    Provide your cluster credentials in `.env.local`:
+
    ```env
    ES_URL=https://your-project.es.us-central1.gcp.elastic.cloud:443
    ES_API_KEY=your-api-key
@@ -125,6 +130,7 @@ flowchart LR
    ```
 
 4. **Initialize the index**:
+
    ```bash
    npm run setup-index
    ```
@@ -144,23 +150,24 @@ Access the search interface at `http://localhost:3000` and the administration pa
 
 Configuration parameters can be defined via environment variables or adjusted in the admin dashboard:
 
-| Variable | Required | Default | Configurable via Admin UI | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `ES_URL` | Yes (or `ES_CLOUD_ID`) | - | Yes | Elasticsearch cluster endpoint URL |
-| `ES_CLOUD_ID` | Yes (or `ES_URL`) | - | Yes | Elastic Cloud deployment identifier |
-| `ES_API_KEY` | Yes | - | Yes | Elasticsearch API authentication key |
-| `ES_INDEX` | No | `photos` | Yes | Target Elasticsearch index name |
-| `INFERENCE_ID` | No | `.jina-embeddings-v5-omni-small` | Yes | Endpoint ID for embeddings |
-| `STORAGE_DIR` | No | `./storage` | No | Local filesystem path for uploads |
-| `ADMIN_PASSWORD` | Yes | - | Yes | Initial administrator access password |
-| `SESSION_SECRET` | No | Derived from `ADMIN_PASSWORD` | No | Secret key for signing session tokens |
-| `DATA_DIR` | No | `./data` | No | Path for persisting runtime configuration |
-| `S3_BUCKET` | No | - | No | Optional AWS S3 bucket name for cloud asset storage |
-| `S3_REGION` | No | AWS Default | No | Target AWS region for S3 operations |
+| Variable         | Required               | Default                          | Configurable via Admin UI | Description                                         |
+| :--------------- | :--------------------- | :------------------------------- | :------------------------ | :-------------------------------------------------- |
+| `ES_URL`         | Yes (or `ES_CLOUD_ID`) | -                                | Yes                       | Elasticsearch cluster endpoint URL                  |
+| `ES_CLOUD_ID`    | Yes (or `ES_URL`)      | -                                | Yes                       | Elastic Cloud deployment identifier                 |
+| `ES_API_KEY`     | Yes                    | -                                | Yes                       | Elasticsearch API authentication key                |
+| `ES_INDEX`       | No                     | `photos`                         | Yes                       | Target Elasticsearch index name                     |
+| `INFERENCE_ID`   | No                     | `.jina-embeddings-v5-omni-small` | Yes                       | Endpoint ID for embeddings                          |
+| `STORAGE_DIR`    | No                     | `./storage`                      | No                        | Local filesystem path for uploads                   |
+| `ADMIN_PASSWORD` | Yes                    | -                                | Yes                       | Initial administrator access password               |
+| `SESSION_SECRET` | No                     | Derived from `ADMIN_PASSWORD`    | No                        | Secret key for signing session tokens               |
+| `DATA_DIR`       | No                     | `./data`                         | No                        | Path for persisting runtime configuration           |
+| `S3_BUCKET`      | No                     | -                                | No                        | Optional AWS S3 bucket name for cloud asset storage |
+| `S3_REGION`      | No                     | AWS Default                      | No                        | Target AWS region for S3 operations                 |
 
 ### Inference Endpoint Options
 
 `INFERENCE_ID` must point to an endpoint supporting:
+
 - `embedding` task type (`POST _inference/embedding/<id>`)
 - Multimodal inputs (accepts base64 images and text strings)
 - Dense vector outputs
@@ -198,25 +205,26 @@ The built-in sliding window rate limiter protects endpoints from excessive reque
 
 ## API Reference
 
-| Method | Endpoint | Authorization | Description |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/api/search` | Public | Executes vector search (`image`, `text`, `id`, `face`, or `face-id`) |
-| `GET` | `/api/images/:file` | Public | Serves stored visual assets |
-| `POST` | `/api/auth/login` | Public | Authenticates admin session and sets HTTP-only cookie |
-| `POST` | `/api/auth/logout` | Public | Terminates active administrator session |
-| `GET` | `/api/ingest` | Admin | Returns count of indexed documents |
-| `POST` | `/api/ingest` | Admin | Multi-part upload handler for indexing assets |
-| `GET` | `/api/admin/settings` | Admin | Retrieves runtime rate limit and operational settings |
-| `PUT` | `/api/admin/settings` | Admin | Updates rate limit policies |
-| `GET` | `/api/admin/config` | Admin | Returns cluster and inference configuration metadata |
-| `PUT` | `/api/admin/config` | Admin | Updates active Elasticsearch connection and inference parameters |
-| `POST` | `/api/admin/config/test` | Admin | Validates connection credentials without persisting changes |
-| `POST` | `/api/admin/index` | Admin | Creates or recreates the target index |
-| `PUT` | `/api/admin/password` | Admin | Rotates the administrative password |
-| `GET` | `/api/admin/faces` | Admin | Returns photos pending facial detection processing |
-| `POST` | `/api/admin/faces` | Admin | Submits extracted face crop vectors for indexed images |
+| Method | Endpoint                 | Authorization | Description                                                          |
+| :----- | :----------------------- | :------------ | :------------------------------------------------------------------- |
+| `POST` | `/api/search`            | Public        | Executes vector search (`image`, `text`, `id`, `face`, or `face-id`) |
+| `GET`  | `/api/images/:file`      | Public        | Serves stored visual assets                                          |
+| `POST` | `/api/auth/login`        | Public        | Authenticates admin session and sets HTTP-only cookie                |
+| `POST` | `/api/auth/logout`       | Public        | Terminates active administrator session                              |
+| `GET`  | `/api/ingest`            | Admin         | Returns count of indexed documents                                   |
+| `POST` | `/api/ingest`            | Admin         | Multi-part upload handler for indexing assets                        |
+| `GET`  | `/api/admin/settings`    | Admin         | Retrieves runtime rate limit and operational settings                |
+| `PUT`  | `/api/admin/settings`    | Admin         | Updates rate limit policies                                          |
+| `GET`  | `/api/admin/config`      | Admin         | Returns cluster and inference configuration metadata                 |
+| `PUT`  | `/api/admin/config`      | Admin         | Updates active Elasticsearch connection and inference parameters     |
+| `POST` | `/api/admin/config/test` | Admin         | Validates connection credentials without persisting changes          |
+| `POST` | `/api/admin/index`       | Admin         | Creates or recreates the target index                                |
+| `PUT`  | `/api/admin/password`    | Admin         | Rotates the administrative password                                  |
+| `GET`  | `/api/admin/faces`       | Admin         | Returns photos pending facial detection processing                   |
+| `POST` | `/api/admin/faces`       | Admin         | Submits extracted face crop vectors for indexed images               |
 
 Example search request using cURL:
+
 ```bash
 curl -X POST http://localhost:3000/api/search \
   -F mode=text \
@@ -257,15 +265,15 @@ curl -X POST http://localhost:3000/api/search \
 
 ## Development and Testing
 
-| Command | Action |
-| :--- | :--- |
-| `npm run dev` | Launch local development server on port 3000 |
-| `npm run build` | Compile optimized Next.js production build |
-| `npm run start` | Start production server |
-| `npm run setup-index` | Provision Elasticsearch index and mapping |
-| `npm run reembed` | Recompute embeddings across stored visual assets |
-| `npm run typecheck` | Perform TypeScript type validation |
-| `npm run lint` | Run ESLint static code analysis |
+| Command                | Action                                               |
+| :--------------------- | :--------------------------------------------------- |
+| `npm run dev`          | Launch local development server on port 3000         |
+| `npm run build`        | Compile optimized Next.js production build           |
+| `npm run start`        | Start production server                              |
+| `npm run setup-index`  | Provision Elasticsearch index and mapping            |
+| `npm run reembed`      | Recompute embeddings across stored visual assets     |
+| `npm run typecheck`    | Perform TypeScript type validation                   |
+| `npm run lint`         | Run ESLint static code analysis                      |
 | `npm run format:check` | Check source files against Prettier formatting rules |
 
 ---
