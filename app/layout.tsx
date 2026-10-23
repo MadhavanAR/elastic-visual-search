@@ -8,8 +8,8 @@ import { Providers } from './providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Image Search',
-  description: 'Reverse image search with Jina embeddings on Elastic Inference Service and Elasticsearch kNN',
+  title: 'Madstylehub Visual Search',
+  description: 'Visual and face search backend powered by Elasticsearch vector search and Jina embeddings for Madstylehub',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

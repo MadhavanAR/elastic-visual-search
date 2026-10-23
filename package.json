@@ -1,8 +1,8 @@
 {
-  "name": "image-search",
+  "name": "madstylehub-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Reverse image search with Jina multimodal embeddings, Elasticsearch kNN and Elastic UI",
+  "description": "Visual and face search backend powered by Elasticsearch vector search and Jina embeddings for Madstylehub",
   "license": "MIT",
   "engines": {
     "node": ">=20"

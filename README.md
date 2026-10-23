@@ -1,8 +1,8 @@
 <div align="center">
 
-# Image Search
+# Madstylehub Visual Search Backend
 
-**Reverse image search powered by Elastic.** Upload a photo or describe one in words, and find the most similar images in your library.
+**Multimodal visual and face search service powered by Elastic.** Upload a photo or describe one in words, and find the most similar items in your library.
 
 Built with Elasticsearch kNN, Jina embeddings v5 omni on the Elastic Inference Service, and Elastic UI.
 
@@ -78,8 +78,8 @@ Jina embeddings aren't a dedicated face recognition model, so treat matches as "
 ### Setup
 
 ```bash
-git clone https://github.com/<your-username>/image-search.git
-cd image-search
+git clone https://github.com/MadhavanAR/Madstylehub-Backend.git
+cd Madstylehub-Backend
 npm install
 cp .env.example .env.local
 ```
@@ -273,11 +273,11 @@ CI runs typecheck, lint, format check and build on every push and pull request.
 The [`Dockerfile`](Dockerfile) builds a small production image with Next.js standalone output. It runs as a non-root user on port 3000.
 
 ```bash
-docker build -t image-search .
+docker build -t madstylehub-backend .
 ```
 
 ```bash
-docker run -d --name image-search -p 3000:3000 --env-file .env.local -v image-search-storage:/app/storage -v image-search-data:/app/data image-search
+docker run -d --name madstylehub-backend -p 3000:3000 --env-file .env.local -v madstylehub-storage:/app/storage -v madstylehub-data:/app/data madstylehub-backend
 ```
 
 - **Settings**: pass them at run time with `--env-file` or `-e`. `.env` files are never copied into the image, and changing `ADMIN_PASSWORD` or `SESSION_SECRET` only needs a container restart, not a rebuild.

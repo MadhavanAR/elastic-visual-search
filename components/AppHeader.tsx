@@ -20,7 +20,7 @@ export function AppHeader() {
           <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
             <EuiIcon type="logoElasticsearch" size="l" />
             <EuiTitle size="xxs">
-              <h1>Image Search</h1>
+              <h1>Madstylehub Visual Search</h1>
             </EuiTitle>
           </EuiFlexGroup>
         </Link>
