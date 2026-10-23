@@ -1,10 +1,6 @@
-<div align="center">
-
 # Madstylehub Visual Search Backend
 
-**Multimodal visual and face search service powered by Elastic.** Upload a photo or describe one in words, and find the most similar items in your library.
-
-Built with Elasticsearch kNN, Jina embeddings v5 omni on the Elastic Inference Service, and Elastic UI.
+Multimodal visual and facial similarity search service powered by Elasticsearch and Jina embeddings. This service supports image-to-image similarity, facial recognition search across group photos, text-to-image search, and camera uploads.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Elasticsearch](https://img.shields.io/badge/Elasticsearch-9.x-005571?logo=elasticsearch)](https://www.elastic.co/elasticsearch)
@@ -12,317 +8,319 @@ Built with Elasticsearch kNN, Jina embeddings v5 omni on the Elastic Inference S
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Elastic UI](https://img.shields.io/badge/UI-Elastic%20UI-00BFB3)](https://eui.elastic.co)
 
-</div>
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Architecture and How It Works](#architecture-and-how-it-works)
+  - [Visual Search Pipeline](#visual-search-pipeline)
+  - [Facial Search Pipeline](#facial-search-pipeline)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation and Setup](#installation-and-setup)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [Inference Endpoint Options](#inference-endpoint-options)
+  - [Switching Models](#switching-models)
+- [Usage](#usage)
+  - [Search Interface](#search-interface)
+  - [Administration Panel](#administration-panel)
+  - [Rate Limiting](#rate-limiting)
+- [API Reference](#api-reference)
+- [Project Structure](#project-structure)
+- [Development and Testing](#development-and-testing)
+- [Docker Deployment](#docker-deployment)
+- [Cloud Deployment (AWS Amplify & S3)](#cloud-deployment-aws-amplify--s3)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## Features
+## Overview
 
-- 🖼️ **Search by image**: drop in a photo and get visually similar images back.
-- 📷 **Camera search**: take a photo in the browser and search with it. The front (selfie) camera opens first.
-- 💬 **Search by text**: describe what you're looking for ("man in a blue suit on stage").
-- 🙂 **Face search**: find photos of the same person, including in group photos. Every face is cropped and embedded separately.
-- 🔁 **Find similar**: jump from any result to images like it.
-- 🔐 **Admin panel**: password-protected bulk upload, with duplicate detection and progress tracking.
-- 🚦 **Rate limiting**: per-visitor search limits, which you can turn on or off and tune from the admin panel.
-- 🌗 **Dark mode**: follows your system theme, with a one-click toggle.
-- 📱 **Mobile friendly**: works on phones and tablets as well as desktop.
-- ☁️ **Nothing extra to host**: embeddings come from Elastic Cloud's managed `.jina-embeddings-v5-omni-small` endpoint, so there are no GPUs, model servers or third-party API keys.
+Madstylehub Visual Search Backend provides high-performance vector search capabilities across visual and facial assets. Built on Elasticsearch approximate kNN and Jina multimodal models deployed via the Elastic Inference Service, the system projects images and text into a shared 1024-dimensional vector space.
 
-## How it works
+---
+
+## Key Features
+
+- **Image-to-Image Search**: Query using an uploaded image to retrieve visually similar items based on style, composition, and content.
+- **Camera Search**: Capture photos directly from desktop or mobile front/rear cameras to perform instant searches.
+- **Text-to-Image Search**: Query visually indexed items using natural language descriptions.
+- **Face Search and Per-Face Cropping**: Detect multiple faces in group photos using client-side SSD MobileNet, generate embeddings per face, and match identities using centered cosine similarity.
+- **Visual Similarity Pivot**: Drill down from any search result to discover similar items in the catalog.
+- **Administrative Portal**: Manage ingestion batches, monitor duplicate detection via SHA-256 hashing, trigger face scanning, and configure cluster settings.
+- **Configurable Rate Limiting**: Token-bucket per-IP rate limiting to safeguard inference and search endpoints.
+- **Responsive Interface**: Theme-aware UI built with Elastic UI supporting light and dark modes.
+- **Zero Local GPU Dependencies**: Utilizes Elastic Cloud managed inference endpoints (`.jina-embeddings-v5-omni-small`).
+
+---
+
+## Architecture and How It Works
 
 ```mermaid
 flowchart LR
-    subgraph App[Next.js app]
-        UI[Search UI] --> S["/api/search"]
-        A[Admin panel] --> I["/api/ingest"]
+    subgraph Client[Next.js Application]
+        UI[Search Interface] --> S["/api/search"]
+        A[Admin Dashboard] --> I["/api/ingest"]
     end
-    subgraph Elastic[Elastic Cloud]
+    subgraph ElasticCloud[Elastic Cloud Services]
         EIS[Elastic Inference Service<br/>.jina-embeddings-v5-omni-small]
         ES[(Elasticsearch<br/>dense_vector index)]
     end
-    I -- image --> EIS
-    S -- image or text --> EIS
-    EIS -- 1024-d vector --> I & S
-    I -- bulk index --> ES
-    S -- kNN query --> ES
+    I -- Image Data --> EIS
+    S -- Image / Text Query --> EIS
+    EIS -- 1024-d Dense Vector --> I & S
+    I -- Bulk Ingestion --> ES
+    S -- kNN Query --> ES
 ```
 
-1. **Indexing**: each uploaded photo is hashed (SHA-256) to skip duplicates, embedded by Jina embeddings v5 omni (small) on the Elastic Inference Service, and stored in a `dense_vector` field (cosine similarity, HNSW).
-2. **Searching**: the query photo or text is embedded into the same vector space, and Elasticsearch runs an approximate kNN search to return the nearest images.
+### Visual Search Pipeline
 
-Because the model puts images and text in one shared space, the same index serves both image-to-image and text-to-image search.
+1. **Ingestion**: Uploaded images are hashed (SHA-256) to ensure deduplication. Unique images are submitted to the Elastic Inference Service for embedding and indexed in Elasticsearch within an HNSW-indexed `dense_vector` field using cosine similarity.
+2. **Search Execution**: Query images or text prompts are vectorized within the same embedding space, and Elasticsearch executes an approximate kNN search against the indexed vectors.
 
-> [!NOTE]
-> Image search finds _visually_ similar photos: the same scene, clothing or look. To find the same person, use face search.
+### Facial Search Pipeline
 
-### Face search
+1. **Face Detection**: During upload, client-side SSD MobileNet (`@vladmandic/face-api`) locates all faces with confidence above 70%, filtering out false positives.
+2. **Per-Face Embedding**: Each cropped face is embedded via the multimodal endpoint and stored in a `nested` `faces` field within the parent photo document.
+3. **Candidate Retrieval and Re-scoring**: A nested kNN query retrieves top candidate photos. Candidate faces are re-scored after subtracting the baseline average face vector, expanding match separation (positive matches typically score 0.40–0.80, whereas non-matching faces fall below 0.30).
 
-1. **Detecting**: when a photo is uploaded, the browser finds every face with an SSD MobileNet detector ([face-api](https://github.com/vladmandic/face-api)) and crops each one, so a group photo gives one crop per person. Detections below 70% confidence, which are often hands, phones or the backs of heads, are dropped.
-2. **Embedding**: each crop is embedded with the same inference endpoint and stored as its own vector in a `nested` `faces` field on the photo.
-3. **Searching**: the query face (from an upload or a selfie) is embedded the same way. A nested kNN search finds candidate photos, and every face in them is re-scored after subtracting the average face. General-purpose embeddings put all faces close together (cosine 0.85–0.98), and centering spreads them out: the same person usually scores 0.4–0.8 and other people below 0.3.
+> **Note on Biometric Data**: Face vectors constitute biometric information. Ensure appropriate compliance, consent, and user disclosures prior to production deployment.
 
-Jina embeddings aren't a dedicated face recognition model, so treat matches as "looks like the same person". Clear, front-facing faces work best, and small or blurry faces in the background match poorly.
+---
 
-> [!IMPORTANT]
-> Face vectors are biometric data. Only index photos of people who agreed to it, and tell your visitors that face search is available.
-
-## Quick start
+## Getting Started
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org) 20 or later
-- An [Elastic Cloud](https://cloud.elastic.co/registration) deployment or Serverless project. The `.jina-embeddings-v5-omni-small` inference endpoint comes preconfigured.
-- An Elasticsearch [API key](https://www.elastic.co/docs/deploy-manage/api-keys/elasticsearch-api-keys)
+- Node.js 20.x or higher
+- An Elastic Cloud deployment (Serverless or Hosted) with preconfigured `.jina-embeddings-v5-omni-small` inference endpoint
+- An Elasticsearch API key with index and inference privileges
 
-### Setup
+### Installation and Setup
 
-```bash
-git clone https://github.com/MadhavanAR/Madstylehub-Backend.git
-cd Madstylehub-Backend
-npm install
-cp .env.example .env.local
-```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/MadhavanAR/Madstylehub-Backend.git
+   cd Madstylehub-Backend
+   ```
 
-Fill in `.env.local`:
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-```bash
-ES_URL=https://your-project.es.us-central1.gcp.elastic.cloud:443
-ES_API_KEY=your-api-key
-ADMIN_PASSWORD=choose-a-strong-password
-```
+3. **Configure local environment variables**:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Provide your cluster credentials in `.env.local`:
+   ```env
+   ES_URL=https://your-project.es.us-central1.gcp.elastic.cloud:443
+   ES_API_KEY=your-api-key
+   ADMIN_PASSWORD=your-secure-admin-password
+   ```
 
-Create the index. This also checks that the inference endpoint works:
+4. **Initialize the index**:
+   ```bash
+   npm run setup-index
+   ```
 
-```bash
-npm run setup-index
-```
+5. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
 
-Start the app:
+Access the search interface at `http://localhost:3000` and the administration panel at `http://localhost:3000/admin`.
 
-```bash
-npm run dev
-```
-
-Open **http://localhost:3000/admin** to upload photos, then **http://localhost:3000** to search.
-
-> [!TIP]
-> Only `ADMIN_PASSWORD` has to be in `.env.local`. You can leave the Elasticsearch settings out, log in to the admin panel, and enter them on the **Configuration** tab, which can also create the index for you.
+---
 
 ## Configuration
 
-Settings come from environment variables (see [`.env.example`](.env.example)), and most of them can also be changed on the admin panel's **Configuration** tab. A value saved in the admin panel overrides the environment variable, and emptying the field goes back to it.
+### Environment Variables
 
-| Variable         | Required     | Default                          | In admin panel | Description                                                     |
-| ---------------- | ------------ | -------------------------------- | -------------- | --------------------------------------------------------------- |
-| `ES_URL`         | one of these | –                                | yes            | Elasticsearch endpoint URL (Serverless, hosted or self-managed) |
-| `ES_CLOUD_ID`    | one of these | –                                | yes            | Cloud ID of an Elastic Cloud hosted deployment                  |
-| `ES_API_KEY`     | yes          | –                                | yes            | Elasticsearch API key                                           |
-| `ES_INDEX`       | no           | `photos`                         | yes            | Index name                                                      |
-| `INFERENCE_ID`   | no           | `.jina-embeddings-v5-omni-small` | yes            | Inference endpoint for image and text embeddings                |
-| `STORAGE_DIR`    | no           | `./storage`                      | no             | Where uploaded images are stored                                |
-| `ADMIN_PASSWORD` | yes          | –                                | can change     | Password for the admin panel                                    |
-| `SESSION_SECRET` | no           | admin password                   | no             | Key for signing admin session cookies                           |
-| `DATA_DIR`       | no           | `./data`                         | no             | Where admin panel settings are stored                           |
-| `S3_BUCKET`      | no           | –                                | no             | Store images and settings in this S3 bucket instead of on disk  |
-| `S3_REGION`      | no           | AWS default                      | no             | Region of `S3_BUCKET`                                           |
+Configuration parameters can be defined via environment variables or adjusted in the admin dashboard:
 
-`ADMIN_PASSWORD` is always needed to log in the first time. After you change the password in the admin panel, the new one is used for logging in, but sessions are still signed with the `.env` value. `SESSION_SECRET`, `DATA_DIR`, `STORAGE_DIR` and the S3 settings stay in `.env`, because the login check, the settings file and the already stored images depend on them.
+| Variable | Required | Default | Configurable via Admin UI | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `ES_URL` | Yes (or `ES_CLOUD_ID`) | - | Yes | Elasticsearch cluster endpoint URL |
+| `ES_CLOUD_ID` | Yes (or `ES_URL`) | - | Yes | Elastic Cloud deployment identifier |
+| `ES_API_KEY` | Yes | - | Yes | Elasticsearch API authentication key |
+| `ES_INDEX` | No | `photos` | Yes | Target Elasticsearch index name |
+| `INFERENCE_ID` | No | `.jina-embeddings-v5-omni-small` | Yes | Endpoint ID for embeddings |
+| `STORAGE_DIR` | No | `./storage` | No | Local filesystem path for uploads |
+| `ADMIN_PASSWORD` | Yes | - | Yes | Initial administrator access password |
+| `SESSION_SECRET` | No | Derived from `ADMIN_PASSWORD` | No | Secret key for signing session tokens |
+| `DATA_DIR` | No | `./data` | No | Path for persisting runtime configuration |
+| `S3_BUCKET` | No | - | No | Optional AWS S3 bucket name for cloud asset storage |
+| `S3_REGION` | No | AWS Default | No | Target AWS region for S3 operations |
 
-> [!WARNING]
-> Settings saved in the admin panel, including the API key, are stored in `DATA_DIR/settings.json` (readable by the server's user only), or at `settings/settings.json` in `S3_BUCKET`. Keep that folder out of backups or version control you share.
+### Inference Endpoint Options
 
-### Choosing an inference endpoint
+`INFERENCE_ID` must point to an endpoint supporting:
+- `embedding` task type (`POST _inference/embedding/<id>`)
+- Multimodal inputs (accepts base64 images and text strings)
+- Dense vector outputs
 
-`INFERENCE_ID` can point at any Elasticsearch inference endpoint that meets these requirements:
+Tested models include `.jina-embeddings-v5-omni-small` (default, 1024-d), `.jina-clip-v2` (1024-d), and `.jina-embeddings-v5-omni-nano` (faster, lightweight).
 
-| Requirement             | Why                                                                                                                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `embedding` task type   | The app calls `POST _inference/embedding/<id>`. Endpoints for `text_embedding` or `sparse_embedding` are rejected. |
-| Accepts images and text | Photos are sent as base64 images. Text-only models (E5, ELSER, most text embedding APIs) can't embed them.         |
-| Returns dense vectors   | Vectors are stored in a `dense_vector` field for kNN. Sparse models such as ELSER don't fit.                       |
+### Switching Models
 
-In practice this means a multimodal model on the Elastic Inference Service. `.jina-embeddings-v5-omni-small` (the default) and `.jina-clip-v2` have been tested; `.jina-embeddings-v5-omni-nano` is a smaller, faster option.
+- **Same Dimensionality (e.g., 1024-d)**: Update `INFERENCE_ID` in `.env.local` or the admin panel, then run `npm run reembed` to vectorize stored assets without re-uploading.
+- **Different Dimensionality**: Test connection and recreate index via the admin UI or command line (`npm run setup-index -- --recreate`), followed by re-uploading assets.
 
-The vector size is detected automatically: creating the index embeds a test string and sizes the index to match. **Test connection** in the admin panel shows the size each endpoint returns and warns when it doesn't match the index.
-
-### Switching models
-
-Vectors from different models (or different sizes of the same model) aren't comparable, so every photo has to be embedded again.
-
-**Same vector size** (for example `.jina-clip-v2` and `.jina-embeddings-v5-omni-small`, both 1024-d): re-embed in place from the stored images, with no re-uploading.
-
-1. Set `INFERENCE_ID` in `.env.local`, or change **Inference endpoint** on the admin panel's **Configuration** tab.
-2. Run `npm run reembed`. With S3 storage, also set `S3_BUCKET`, `S3_REGION` and AWS credentials (such as `AWS_PROFILE`) so it can read the images.
-3. Restart or redeploy the app. Searches return poor results between steps 1 and 2.
-4. Faces are cropped in the browser, so `reembed` clears them. On the admin **Photos** tab, click **Scan for faces**.
-
-**Different vector size**: on the **Configuration** tab click **Test connection**, then **Recreate index** (this deletes all indexed vectors), and re-upload your photos. From the command line: `npm run setup-index -- --recreate`.
-
-### Smaller vectors
-
-Some models, such as Jina CLIP v2, support Matryoshka embeddings. To trade a little accuracy for a smaller index, create your own endpoint:
-
-```
-PUT _inference/embedding/jina-clip-v2-512
-{
-  "service": "elastic",
-  "service_settings": { "model_id": "jina-clip-v2", "dimensions": 512 }
-}
-```
-
-Then set `INFERENCE_ID=jina-clip-v2-512` and follow the steps in [Switching models](#switching-models).
+---
 
 ## Usage
 
-### Search page (`/`)
+### Search Interface
 
-- Upload a photo or type a description, then use **Find similar** on any result to search from it.
-- **Take a photo** opens the front (selfie) camera, and you can switch to the back camera. Browsers only allow the camera on HTTPS pages or `localhost`.
-- **Face** tab: upload a photo or take a selfie. With several people in the photo, pick the face to search for. Results are centred on the matching face, and **Find this face** searches from it. The minimum similarity starts at 40% here, since lower matches are usually someone else.
-- Scores are cosine similarity. Photo-to-photo matches usually score 0.5–1.0, and text-to-photo matches around 0.2–0.45, because the model puts text and images in the same space but not on top of each other.
-- **Minimum similarity** hides results below a score, without running a new search.
+- **Visual Query**: Drag and drop or upload an image file to trigger vector comparison.
+- **Camera Mode**: Capture an image live; automatically requests camera permissions over HTTPS or localhost.
+- **Face Search Tab**: Select individual face crops from group photos to isolate search targets.
+- **Similarity Threshold**: Adjust the minimum similarity filter slider to refine result precision without additional network requests.
 
-### Admin panel (`/admin`)
+### Administration Panel
 
-- Log in with `ADMIN_PASSWORD`. The session lasts 7 days.
-- **Photos** tab: drag and drop photos to index them. Uploads go in batches, and files already in the index are skipped. Faces are found and stored right after each upload; the **Faces** column shows how many.
-- **Face search** panel: **Scan for faces** processes photos indexed before face search, or whose scan failed.
-- **Configuration** tab (`/admin#configuration`):
-  - Change the Elasticsearch connection, index and inference endpoint. **Test connection** checks unsaved changes first, and can create or recreate the index.
-  - Turn search rate limiting on or off (this applies immediately) and set the number of searches allowed per minute, hour or day.
-  - Change the admin password.
+- Accessible at `/admin` (session valid for 7 days upon authentication).
+- **Photos Management**: Batch upload images, monitor ingestion queues, and verify deduplication.
+- **Face Scanner**: Run retrospective facial recognition indexing on previously stored photos.
+- **System Settings**: Dynamically update cluster endpoints, toggle search rate limiting, or rotate the administrative password.
 
-### Rate limiting
+### Rate Limiting
 
-When it's on, each visitor IP gets a fixed number of searches per window. Responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers. A visitor who goes over the limit gets `429 Too Many Requests` with `Retry-After`, and the UI shows a countdown. Logged-in admins are never limited.
+The built-in sliding window rate limiter protects endpoints from excessive requests. Rate limits include standard response headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`). When exceeded, endpoints return `429 Too Many Requests` with a `Retry-After` header.
 
-## API
+---
 
-| Method | Route                    | Auth  | Description                                                                                                        |
-| ------ | ------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------ |
-| `POST` | `/api/search`            | –     | Form data: `mode` (`image` \| `text` \| `id` \| `face` \| `face-id`), `file` / `text` / `id` (+ `face` index), `k` |
-| `GET`  | `/api/images/:file`      | –     | Serves a stored image                                                                                              |
-| `POST` | `/api/auth/login`        | –     | JSON `{ "password": "..." }`, sets the session cookie                                                              |
-| `POST` | `/api/auth/logout`       | –     | Clears the session cookie                                                                                          |
-| `GET`  | `/api/ingest`            | admin | Number of indexed photos                                                                                           |
-| `POST` | `/api/ingest`            | admin | Form data: one or more `files`                                                                                     |
-| `GET`  | `/api/admin/settings`    | admin | Current settings                                                                                                   |
-| `PUT`  | `/api/admin/settings`    | admin | JSON `{ "rateLimit": { "enabled", "maxRequests", "windowSeconds" } }`                                              |
-| `GET`  | `/api/admin/config`      | admin | Current configuration and where each value comes from (no secrets)                                                 |
-| `PUT`  | `/api/admin/config`      | admin | JSON with any of `esEndpoint`, `esApiKey`, `esIndex`, `inferenceId` (`""` resets to `.env`)                        |
-| `POST` | `/api/admin/config/test` | admin | Same body as above, tests the connection without saving                                                            |
-| `POST` | `/api/admin/index`       | admin | Create the index, or `{ "recreate": true }` to drop and recreate it                                                |
-| `PUT`  | `/api/admin/password`    | admin | JSON `{ "current": "...", "next": "..." }`                                                                         |
-| `GET`  | `/api/admin/faces`       | admin | Photos not yet scanned for faces (`?limit=`)                                                                       |
-| `POST` | `/api/admin/faces`       | admin | Form data: `id`, `faces` (JSON `[{ box, score }]`) and one `crop` JPEG per face                                    |
+## API Reference
 
-Example text search:
+| Method | Endpoint | Authorization | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/search` | Public | Executes vector search (`image`, `text`, `id`, `face`, or `face-id`) |
+| `GET` | `/api/images/:file` | Public | Serves stored visual assets |
+| `POST` | `/api/auth/login` | Public | Authenticates admin session and sets HTTP-only cookie |
+| `POST` | `/api/auth/logout` | Public | Terminates active administrator session |
+| `GET` | `/api/ingest` | Admin | Returns count of indexed documents |
+| `POST` | `/api/ingest` | Admin | Multi-part upload handler for indexing assets |
+| `GET` | `/api/admin/settings` | Admin | Retrieves runtime rate limit and operational settings |
+| `PUT` | `/api/admin/settings` | Admin | Updates rate limit policies |
+| `GET` | `/api/admin/config` | Admin | Returns cluster and inference configuration metadata |
+| `PUT` | `/api/admin/config` | Admin | Updates active Elasticsearch connection and inference parameters |
+| `POST` | `/api/admin/config/test` | Admin | Validates connection credentials without persisting changes |
+| `POST` | `/api/admin/index` | Admin | Creates or recreates the target index |
+| `PUT` | `/api/admin/password` | Admin | Rotates the administrative password |
+| `GET` | `/api/admin/faces` | Admin | Returns photos pending facial detection processing |
+| `POST` | `/api/admin/faces` | Admin | Submits extracted face crop vectors for indexed images |
 
+Example search request using cURL:
 ```bash
-curl -X POST http://localhost:3000/api/search -F mode=text -F text="sunset over the sea"
+curl -X POST http://localhost:3000/api/search \
+  -F mode=text \
+  -F text="modern streetwear jacket"
 ```
 
-## Project structure
+---
+
+## Project Structure
 
 ```
+.
 ├── app/
-│   ├── page.tsx               Search page
-│   ├── admin/                 Admin panel and login
-│   ├── api/                   Route handlers
-│   ├── layout.tsx             Root layout (header, footer, theme)
-│   └── providers.tsx          EUI provider, SSR styles, color mode
-├── components/                EUI components (header, footer, camera, results, face scan, settings)
+│   ├── page.tsx               # Main visual and facial search UI
+│   ├── admin/                 # Administration and configuration dashboard
+│   ├── api/                   # Route handlers for search, ingestion, and admin tasks
+│   ├── layout.tsx             # Root application layout
+│   └── providers.tsx          # Elastic UI context and styling providers
+├── components/                # Modular EUI interface components
 ├── lib/
-│   ├── embeddings.ts          Elastic Inference Service client
-│   ├── es.ts                  Elasticsearch client and index mapping
-│   ├── indexer.ts             Dedupe, store, embed and bulk index
-│   ├── search.ts              kNN queries
-│   ├── face-detect.ts         Browser face detection and cropping
-│   ├── faces.ts               Face storage and search
-│   ├── face-stats.ts          Average face used to re-score matches
-│   ├── auth.ts                Password check and signed session cookie
-│   ├── admin-password.ts      Password changed from the admin panel
-│   ├── config.ts              Admin panel overrides on top of .env
-│   ├── index-setup.ts         Connection test and index creation
-│   ├── rate-limit.ts          Per-IP rate limiter
-│   ├── settings.ts            Persisted admin settings
-│   ├── object-store.ts        Local disk or S3 storage for images and settings
-│   └── types.ts               Types shared by the API and the UI
-├── middleware.ts              Protects /admin and admin APIs
-├── scripts/                  Index setup, re-embedding, Amplify env
-└── Dockerfile                 Production container image
+│   ├── embeddings.ts          # Elastic Inference Service integration
+│   ├── es.ts                  # Elasticsearch client and schema definitions
+│   ├── indexer.ts             # Ingestion, deduplication, and bulk indexers
+│   ├── search.ts              # Approximate kNN query builders
+│   ├── face-detect.ts         # Browser-side SSD MobileNet detection routines
+│   ├── faces.ts               # Facial embedding storage and search handlers
+│   ├── face-stats.ts          # Average vector subtraction and re-scoring logic
+│   ├── auth.ts                # Session management and authentication helpers
+│   ├── config.ts              # Hierarchical configuration resolution
+│   ├── rate-limit.ts          # IP-based sliding window rate limiter
+│   └── object-store.ts        # Storage abstraction for local filesystem and AWS S3
+├── middleware.ts              # Route protection middleware for administrative routes
+├── scripts/                   # Setup and migration scripts
+└── Dockerfile                 # Standalone production container configuration
 ```
 
-## Development
+---
 
-| Command                       | Description                                      |
-| ----------------------------- | ------------------------------------------------ |
-| `npm run dev`                 | Start the dev server                             |
-| `npm run build` / `npm start` | Production build and server                      |
-| `npm run setup-index`         | Create the index (`-- --recreate` to rebuild it) |
-| `npm run reembed`             | Re-embed every photo with the current model      |
-| `npm run typecheck`           | Type-check with TypeScript                       |
-| `npm run lint`                | Lint with ESLint                                 |
-| `npm run format`              | Format with Prettier (`format:check` to verify)  |
+## Development and Testing
 
-CI runs typecheck, lint, format check and build on every push and pull request.
+| Command | Action |
+| :--- | :--- |
+| `npm run dev` | Launch local development server on port 3000 |
+| `npm run build` | Compile optimized Next.js production build |
+| `npm run start` | Start production server |
+| `npm run setup-index` | Provision Elasticsearch index and mapping |
+| `npm run reembed` | Recompute embeddings across stored visual assets |
+| `npm run typecheck` | Perform TypeScript type validation |
+| `npm run lint` | Run ESLint static code analysis |
+| `npm run format:check` | Check source files against Prettier formatting rules |
 
-## Docker
+---
 
-The [`Dockerfile`](Dockerfile) builds a small production image with Next.js standalone output. It runs as a non-root user on port 3000.
+## Docker Deployment
+
+Build and execute the service using the standalone production Docker image:
 
 ```bash
 docker build -t madstylehub-backend .
 ```
 
 ```bash
-docker run -d --name madstylehub-backend -p 3000:3000 --env-file .env.local -v madstylehub-storage:/app/storage -v madstylehub-data:/app/data madstylehub-backend
+docker run -d \
+  --name madstylehub-backend \
+  -p 3000:3000 \
+  --env-file .env.local \
+  -v madstylehub-storage:/app/storage \
+  -v madstylehub-data:/app/data \
+  madstylehub-backend
 ```
 
-- **Settings**: pass them at run time with `--env-file` or `-e`. `.env` files are never copied into the image, and changing `ADMIN_PASSWORD` or `SESSION_SECRET` only needs a container restart, not a rebuild.
-- **Volumes**: `/app/storage` holds uploaded images and `/app/data` holds admin settings, including an API key saved in the admin panel. Keep both on volumes so they survive upgrades.
-- **Index setup**: with no index yet, open the admin panel's **Configuration** tab and use **Create index**.
-- **Networking**: the image makes Node try IPv4 first and wait up to 1 s per address, because Docker networks usually lack IPv6 and distant clusters can take longer than Node's 250 ms default to connect.
-
-## Deploy to AWS Amplify
-
-Amplify runs the server on short-lived functions with no lasting disk, so images and settings go to S3. [`amplify.yml`](amplify.yml) has the build settings.
-
-1. Create a private S3 bucket in the same region as the app.
-2. Create an IAM role that `amplify.amazonaws.com` can assume, allowing `s3:GetObject` and `s3:PutObject` on the bucket, and set it as the app's **compute role**.
-3. Create the Amplify app from your Git repository, with the **Web Compute** platform.
-4. Add the environment variables from the configuration table, including `S3_BUCKET` and `S3_REGION`. Amplify only passes them to the build, so [`scripts/amplify-env.mjs`](scripts/amplify-env.mjs) writes them into `.env.production` for the server.
-
-Amplify rejects request bodies over about 6 MB and drops requests whose upload takes about a minute (a `408`), which full-size phone photos hit on slow connections. So the browser resizes photos over 1 MB before sending them: to 2048 px for admin uploads and 1024 px for searches. Each upload request stays under 1.5 MB. Photos are still identified by the SHA-256 of the original file, so re-uploading one is detected as a duplicate.
-
-## Deployment notes
-
-- **Several instances**: set `S3_BUCKET` so every instance shares images and settings. The rate limiter runs in memory, so on Amplify or behind a load balancer each instance counts separately; move it to a shared store (such as Redis) for strict limits.
-- **Security**: use a strong `ADMIN_PASSWORD` and serve the app over HTTPS. Session cookies are `httpOnly`, and `Secure` in production.
-- **Rebuild after changing `ADMIN_PASSWORD` or `SESSION_SECRET` in `.env`** (not needed with Docker): `next build` bakes values from `.env` files into the middleware. Changes made in the admin panel apply immediately.
-
-## Contributing
-
-Contributions are welcome.
-
-1. Fork the repo and create a branch: `git checkout -b feature/my-change`
-2. Make your changes, then run `npm run typecheck && npm run lint && npm run format:check`
-3. Open a pull request that describes what changed and why
-
-For bugs and feature ideas, please open an issue first.
-
-## Acknowledgments
-
-- [Elastic](https://www.elastic.co): Elasticsearch, the Elastic Inference Service and [Elastic UI](https://eui.elastic.co)
-- [Jina AI](https://jina.ai): the jina-embeddings-v5-omni and [jina-clip-v2](https://jina.ai/models/jina-clip-v2/) multimodal embedding models
-
-## License
-
-[MIT](LICENSE)
+- Mount volumes to `/app/storage` (uploaded images) and `/app/data` (runtime configurations) to preserve data across container restarts.
+- Credentials can be supplied dynamically at runtime using `--env-file` or environment variable flags (`-e`).
 
 ---
 
-<div align="center">
-<sub>Powered by <a href="https://www.elastic.co">Elastic</a></sub>
-</div>
+## Cloud Deployment (AWS Amplify & S3)
+
+For serverless deployments where persistent container disks are unavailable:
+
+1. Provision an Amazon S3 bucket for persistent storage.
+2. Grant the application compute role `s3:GetObject` and `s3:PutObject` IAM permissions.
+3. Configure `S3_BUCKET` and `S3_REGION` in the deployment environment.
+4. Client uploads are automatically constrained below serverless gateway payload limits (1.5 MB client-side compression threshold).
+
+---
+
+## Contributing
+
+Contributions, bug reports, and enhancements are welcome.
+
+1. Fork the repository.
+2. Create a dedicated feature branch:
+   ```bash
+   git checkout -b feature/improvement-name
+   ```
+3. Commit verified changes ensuring test and lint compliance:
+   ```bash
+   npm run typecheck && npm run lint && npm run format:check
+   ```
+4. Push the branch and open a Pull Request outlining the changes and motivation.
+
+---
+
+## License
+
+This project is licensed under the terms of the [MIT License](LICENSE).
