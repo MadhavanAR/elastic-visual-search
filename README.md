@@ -1,4 +1,4 @@
-# Madstylehub Visual Search Backend
+# Elastic Visual Search
 
 Multimodal visual and facial similarity search service powered by Elasticsearch and Jina embeddings. This service supports image-to-image similarity, facial recognition search across group photos, text-to-image search, and camera uploads.
 
@@ -40,7 +40,7 @@ Multimodal visual and facial similarity search service powered by Elasticsearch 
 
 ## Overview
 
-Madstylehub Visual Search Backend provides high-performance vector search capabilities across visual and facial assets. Built on Elasticsearch approximate kNN and Jina multimodal models deployed via the Elastic Inference Service, the system projects images and text into a shared 1024-dimensional vector space.
+Elastic Visual Search provides high-performance vector search capabilities across visual and facial assets. Built on Elasticsearch approximate kNN and Jina multimodal models deployed via the Elastic Inference Service, the system projects images and text into a shared 1024-dimensional vector space.
 
 ---
 
@@ -104,8 +104,8 @@ flowchart LR
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/MadhavanAR/Madstylehub-Backend.git
-   cd Madstylehub-Backend
+   git clone https://github.com/MadhavanAR/elastic-visual-search.git
+   cd elastic-visual-search
    ```
 
 2. **Install dependencies**:
@@ -275,17 +275,17 @@ curl -X POST http://localhost:3000/api/search \
 Build and execute the service using the standalone production Docker image:
 
 ```bash
-docker build -t madstylehub-backend .
+docker build -t elastic-visual-search .
 ```
 
 ```bash
 docker run -d \
-  --name madstylehub-backend \
+  --name elastic-visual-search \
   -p 3000:3000 \
   --env-file .env.local \
-  -v madstylehub-storage:/app/storage \
-  -v madstylehub-data:/app/data \
-  madstylehub-backend
+  -v elastic-visual-search-storage:/app/storage \
+  -v elastic-visual-search-data:/app/data \
+  elastic-visual-search
 ```
 
 - Mount volumes to `/app/storage` (uploaded images) and `/app/data` (runtime configurations) to preserve data across container restarts.

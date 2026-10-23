@@ -1,8 +1,8 @@
 {
-  "name": "madstylehub-backend",
+  "name": "elastic-visual-search",
   "version": "0.1.0",
   "private": true,
-  "description": "Visual and face search backend powered by Elasticsearch vector search and Jina embeddings for Madstylehub",
+  "description": "Visual and face search service powered by Elasticsearch vector search and Jina embeddings",
   "license": "MIT",
   "engines": {
     "node": ">=20"
